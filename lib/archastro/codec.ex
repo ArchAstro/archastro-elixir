@@ -1,7 +1,13 @@
 # Copyright (c) 2026 ArchAstro Inc. Licensed under the MIT License.
 
 defmodule ArchAstro.Codec do
-  @moduledoc false
+  @moduledoc """
+  Converts between ArchAstro structs and their JSON wire representations.
+
+  Generated resource and channel modules use descriptor values to validate and
+  decode nested API payloads. Most applications use those generated modules
+  rather than calling this low-level codec directly.
+  """
 
   @type descriptor ::
           :void
