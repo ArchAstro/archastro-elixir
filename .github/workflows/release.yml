@@ -78,18 +78,21 @@ jobs:
           esac
 
           version="$major.$minor.$patch"
+          series="$major.$minor"
           tag="v$version"
           branch="release/$tag"
           title="release: archastro v$version"
 
           sed -i -E "s/^      version: \"[0-9]+\.[0-9]+\.[0-9]+\",$/      version: \"$version\",/" mix.exs
+          sed -i -E "s/\{:archastro, \"~> [0-9]+\.[0-9]+\"\}/{:archastro, \"~> $series\"}/" README.md
           jq --arg version "$version" '.version = $version' scripts/sdk-generator-config.json > scripts/sdk-generator-config.json.tmp
           mv scripts/sdk-generator-config.json.tmp scripts/sdk-generator-config.json
 
           configured=$(jq -r .version scripts/sdk-generator-config.json)
+          documented=$(sed -nE 's/^  \[\{:archastro, "~> ([0-9]+\.[0-9]+)"\}\]$/\1/p' README.md)
           # Avoid compiler output contaminating the captured version after mix.exs changes.
           actual=$(mix run --no-compile --no-start -e 'IO.write(Mix.Project.config()[:version])')
-          if [ "$actual" != "$version" ] || [ "$configured" != "$version" ]; then
+          if [ "$actual" != "$version" ] || [ "$configured" != "$version" ] || [ "$documented" != "$series" ]; then
             echo "Version bump did not update all release metadata" >&2
             exit 1
           fi
@@ -108,7 +111,7 @@ jobs:
         run: |
           set -euo pipefail
           git checkout -b "$BRANCH"
-          git add mix.exs scripts/sdk-generator-config.json
+          git add mix.exs README.md scripts/sdk-generator-config.json
           git commit -m "$TITLE"
           git push origin "$BRANCH"
 
