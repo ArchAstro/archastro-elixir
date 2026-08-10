@@ -1,0 +1,151 @@
+name: Release
+
+# Manually trigger from the Actions tab to:
+#   1. Bump the package version on a release branch
+#   2. Push vX.Y.Z, then dispatch publish.yml at that tag
+#   3. Open and merge a PR so main tracks the published version
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  release:
+    name: Bump + branch + tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.18"
+          cache: npm
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          elixir-version: "1.20.0"
+          otp-version: "27.0"
+
+      - run: npm ci --ignore-scripts
+      - run: mix deps.get
+
+      - name: Validate package
+        run: |
+          mix format --check-formatted
+          mix compile --warnings-as-errors
+          mix test --warnings-as-errors
+          mix hex.build
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        id: bump
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+
+          current=$(sed -nE 's/^      version: "([0-9]+\.[0-9]+\.[0-9]+)",$/\1/p' mix.exs)
+          if [ -z "$current" ]; then
+            echo "Could not read a stable semantic version from mix.exs" >&2
+            exit 1
+          fi
+
+          IFS=. read -r major minor patch <<< "$current"
+          case "$BUMP" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+            *) echo "Unsupported bump: $BUMP" >&2; exit 1 ;;
+          esac
+
+          version="$major.$minor.$patch"
+          tag="v$version"
+          branch="release/$tag"
+          title="release: archastro v$version"
+
+          sed -i -E "s/^      version: \"[0-9]+\.[0-9]+\.[0-9]+\",$/      version: \"$version\",/" mix.exs
+          jq --arg version "$version" '.version = $version' scripts/sdk-generator-config.json > scripts/sdk-generator-config.json.tmp
+          mv scripts/sdk-generator-config.json.tmp scripts/sdk-generator-config.json
+
+          configured=$(jq -r .version scripts/sdk-generator-config.json)
+          actual=$(mix run --no-start -e 'IO.write(Mix.Project.config()[:version])')
+          if [ "$actual" != "$version" ] || [ "$configured" != "$version" ]; then
+            echo "Version bump did not update all release metadata" >&2
+            exit 1
+          fi
+
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "branch=$branch"
+            echo "title=$title"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Commit + push release branch
+        env:
+          BRANCH: ${{ steps.bump.outputs.branch }}
+          TITLE: ${{ steps.bump.outputs.title }}
+        run: |
+          set -euo pipefail
+          git checkout -b "$BRANCH"
+          git add mix.exs scripts/sdk-generator-config.json
+          git commit -m "$TITLE"
+          git push origin "$BRANCH"
+
+      - name: Create + push tag
+        env:
+          TAG: ${{ steps.bump.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
+
+      # Tags pushed with GITHUB_TOKEN do not start another workflow run.
+      - name: Dispatch publish workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.bump.outputs.tag }}
+        run: gh workflow run publish.yml --ref "$TAG"
+
+      - name: Open + merge version bump PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.bump.outputs.branch }}
+          TITLE: ${{ steps.bump.outputs.title }}
+          TAG: ${{ steps.bump.outputs.tag }}
+        run: |
+          set -euo pipefail
+          body=$(cat <<EOF
+          Automated release version bump.
+
+          - Tag: \`$TAG\`
+          - Publishing: dispatched \`publish.yml\` at that immutable tag
+
+          Tests and package validation passed before this branch was created.
+          EOF
+          )
+          pr_url=$(gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "$TITLE" \
+            --body "$body")
+          gh pr merge "$pr_url" --rebase --delete-branch
