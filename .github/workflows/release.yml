@@ -87,7 +87,8 @@ jobs:
           mv scripts/sdk-generator-config.json.tmp scripts/sdk-generator-config.json
 
           configured=$(jq -r .version scripts/sdk-generator-config.json)
-          actual=$(mix run --no-start -e 'IO.write(Mix.Project.config()[:version])')
+          # Avoid compiler output contaminating the captured version after mix.exs changes.
+          actual=$(mix run --no-compile --no-start -e 'IO.write(Mix.Project.config()[:version])')
           if [ "$actual" != "$version" ] || [ "$configured" != "$version" ]; then
             echo "Version bump did not update all release metadata" >&2
             exit 1
