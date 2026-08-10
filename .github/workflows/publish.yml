@@ -41,7 +41,8 @@ jobs:
             *) echo "Expected a vX.Y.Z tag, got: $TAG" >&2; exit 1 ;;
           esac
 
-          actual=$(mix run --no-start -e 'IO.write(Mix.Project.config()[:version])')
+          # Avoid first-run compiler output contaminating the captured version.
+          actual=$(mix run --no-compile --no-start -e 'IO.write(Mix.Project.config()[:version])')
           if [ "$actual" != "$version" ]; then
             echo "Version mismatch: tag says $version, mix.exs says $actual" >&2
             exit 1

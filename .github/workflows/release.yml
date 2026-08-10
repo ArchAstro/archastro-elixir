@@ -3,7 +3,7 @@ name: Release
 # Manually trigger from the Actions tab to:
 #   1. Bump the package version on a release branch
 #   2. Push vX.Y.Z, then dispatch publish.yml at that tag
-#   3. Open and merge a PR so main tracks the published version
+#   3. Open a PR so main can review and track the published version
 
 on:
   workflow_dispatch:
@@ -127,7 +127,7 @@ jobs:
           TAG: ${{ steps.bump.outputs.tag }}
         run: gh workflow run publish.yml --ref "$TAG"
 
-      - name: Open + merge version bump PR
+      - name: Open version bump PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ steps.bump.outputs.branch }}
@@ -144,9 +144,8 @@ jobs:
           Tests and package validation passed before this branch was created.
           EOF
           )
-          pr_url=$(gh pr create \
+          gh pr create \
             --base main \
             --head "$BRANCH" \
             --title "$TITLE" \
-            --body "$body")
-          gh pr merge "$pr_url" --rebase --delete-branch
+            --body "$body"
