@@ -7,4 +7,4 @@ exclude =
     else: [:channel_contract]
 
 ExUnit.start(exclude: exclude)
-ExUnit.after_suite(fn _ -> ArchAstro.ContractSupport.stop_servers() end)
+ExUnit.after_suite(fn _ -> ArchAstro.SDK.ContractSupport.stop_servers() end)

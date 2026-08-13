@@ -1,6 +1,6 @@
 # Copyright (c) 2026 ArchAstro Inc. Licensed under the MIT License.
 
-defmodule ArchAstro.Path do
+defmodule ArchAstro.SDK.Path do
   @moduledoc false
   @type encodable :: String.t() | integer() | float() | atom()
   @spec encode(encodable()) :: String.t()

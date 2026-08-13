@@ -1,6 +1,6 @@
 # Copyright (c) 2026 ArchAstro Inc. Licensed under the MIT License.
 
-defmodule ArchAstro.TokenServer.Default do
+defmodule ArchAstro.SDK.TokenServer.Default do
   @moduledoc """
   GenServer-backed credential provider with a private ETS credential cache.
 
@@ -11,10 +11,10 @@ defmodule ArchAstro.TokenServer.Default do
   """
 
   use GenServer
-  @behaviour ArchAstro.TokenServer
+  @behaviour ArchAstro.SDK.TokenServer
 
-  alias ArchAstro.Auth.TokenSet
-  alias ArchAstro.Authorization
+  alias ArchAstro.SDK.Auth.TokenSet
+  alias ArchAstro.SDK.Authorization
 
   @type mode ::
           {:secret_key, String.t()}
@@ -29,28 +29,28 @@ defmodule ArchAstro.TokenServer.Default do
     GenServer.start_link(__MODULE__, init_opts, gen_opts)
   end
 
-  @impl ArchAstro.TokenServer
+  @impl ArchAstro.SDK.TokenServer
   def bind(server, scope) do
     with :ok <- GenServer.call(server, {:bind, scope}) do
       {:ok, {server, scope}}
     end
   end
 
-  @impl ArchAstro.TokenServer
+  @impl ArchAstro.SDK.TokenServer
   def authorization({server, scope}), do: GenServer.call(server, {:authorization, scope})
 
-  @impl ArchAstro.TokenServer
+  @impl ArchAstro.SDK.TokenServer
   def refresh_if_current({server, scope}, generation),
     do: GenServer.call(server, {:refresh, scope, generation}, :infinity)
 
-  @impl ArchAstro.TokenServer
+  @impl ArchAstro.SDK.TokenServer
   def put_session(server, session_id, %TokenSet{} = tokens) do
     if TokenSet.valid?(tokens),
       do: GenServer.call(server, {:put_session, session_id, TokenSet.normalize(tokens)}),
       else: {:error, :invalid_token_set}
   end
 
-  @impl ArchAstro.TokenServer
+  @impl ArchAstro.SDK.TokenServer
   def delete_session(server, session_id),
     do: GenServer.call(server, {:delete_session, session_id})
 

@@ -1,13 +1,13 @@
 # Copyright (c) 2026 ArchAstro Inc. Licensed under the MIT License.
 
-defmodule ArchAstro.TokenServerTest do
+defmodule ArchAstro.SDK.TokenServerTest do
   use ExUnit.Case, async: true
 
-  alias ArchAstro.Auth.TokenSet
-  alias ArchAstro.{Client, HTTP, TokenServer}
+  alias ArchAstro.SDK.Auth.TokenSet
+  alias ArchAstro.SDK.{Client, HTTP, TokenServer}
 
   defmodule ControlledStore do
-    @behaviour ArchAstro.TokenServer.Store
+    @behaviour ArchAstro.SDK.TokenServer.Store
 
     @impl true
     def load(agent, id) do
@@ -392,7 +392,7 @@ defmodule ArchAstro.TokenServerTest do
       start_supervised!({TokenServer.Default, mode: {:sessions, publishable_key: "pk_test"}})
 
     assert {:ok, client} =
-             ArchAstro.Session.login(
+             ArchAstro.SDK.Session.login(
                server,
                "lv-session-id",
                "person@example.com",
@@ -495,14 +495,14 @@ defmodule ArchAstro.TokenServerTest do
   end
 
   defmodule CustomProvider do
-    @behaviour ArchAstro.TokenServer
+    @behaviour ArchAstro.SDK.TokenServer
 
     def bind(value, scope), do: {:ok, {value, scope}}
 
     def authorization({_value, scope}),
       do:
         {:ok,
-         %ArchAstro.Authorization{
+         %ArchAstro.SDK.Authorization{
            headers: [{"x-custom-scope", inspect(scope)}],
            generation: 0,
            refreshable: false

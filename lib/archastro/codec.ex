@@ -1,6 +1,6 @@
 # Copyright (c) 2026 ArchAstro Inc. Licensed under the MIT License.
 
-defmodule ArchAstro.Codec do
+defmodule ArchAstro.SDK.Codec do
   @moduledoc """
   Converts between ArchAstro structs and their JSON wire representations.
 
@@ -29,7 +29,7 @@ defmodule ArchAstro.Codec do
 
   @type field_descriptor :: {atom(), {String.t(), descriptor()}}
 
-  @spec struct_from_map(module(), ArchAstro.JSON.object(), [field_descriptor()]) :: struct()
+  @spec struct_from_map(module(), ArchAstro.SDK.JSON.object(), [field_descriptor()]) :: struct()
   def struct_from_map(module, data, fields) when is_map(data) do
     unless matches?(data, {:object, Keyword.values(fields)}) do
       raise ArgumentError, "response does not match required fields for #{inspect(module)}"
@@ -46,7 +46,7 @@ defmodule ArchAstro.Codec do
     struct(module, values)
   end
 
-  @spec struct_to_map(struct(), [field_descriptor()]) :: ArchAstro.JSON.object()
+  @spec struct_to_map(struct(), [field_descriptor()]) :: ArchAstro.SDK.JSON.object()
   def struct_to_map(value, fields) do
     Enum.reduce(fields, %{}, fn {field, {wire, _descriptor}}, acc ->
       put_optional(acc, wire, Map.fetch!(value, field))
@@ -54,15 +54,21 @@ defmodule ArchAstro.Codec do
   end
 
   @spec put_optional(
-          ArchAstro.JSON.object(),
+          ArchAstro.SDK.JSON.object(),
           String.t(),
-          ArchAstro.JSON.t() | ArchAstro.Unset.t() | struct()
-        ) :: ArchAstro.JSON.object()
+          ArchAstro.SDK.JSON.t() | ArchAstro.SDK.Unset.t() | struct()
+        ) :: ArchAstro.SDK.JSON.object()
   def put_optional(map, _key, :__archastro_unset__), do: map
   def put_optional(map, key, value), do: Map.put(map, key, encode(value))
 
-  @spec encode(ArchAstro.JSON.t() | ArchAstro.Unset.t() | struct() | Date.t() | DateTime.t()) ::
-          ArchAstro.JSON.t()
+  @spec encode(
+          ArchAstro.SDK.JSON.t()
+          | ArchAstro.SDK.Unset.t()
+          | struct()
+          | Date.t()
+          | DateTime.t()
+        ) ::
+          ArchAstro.SDK.JSON.t()
   def encode(:__archastro_unset__), do: nil
   def encode(%DateTime{} = value), do: DateTime.to_iso8601(value)
   def encode(%Date{} = value), do: Date.to_iso8601(value)
@@ -79,8 +85,8 @@ defmodule ArchAstro.Codec do
   def encode(value) when is_list(value), do: Enum.map(value, &encode/1)
   def encode(value), do: value
 
-  @spec decode(ArchAstro.JSON.t(), descriptor()) ::
-          ArchAstro.JSON.t() | struct() | DateTime.t() | :ok
+  @spec decode(ArchAstro.SDK.JSON.t(), descriptor()) ::
+          ArchAstro.SDK.JSON.t() | struct() | DateTime.t() | :ok
   def decode(_value, :void), do: :ok
   def decode(value, :unknown), do: value
   def decode(value, :string) when is_binary(value), do: value
@@ -145,7 +151,7 @@ defmodule ArchAstro.Codec do
     raise ArgumentError, "response does not match #{inspect(descriptor)}"
   end
 
-  @spec matches?(ArchAstro.JSON.t(), descriptor()) :: boolean()
+  @spec matches?(ArchAstro.SDK.JSON.t(), descriptor()) :: boolean()
   def matches?(_value, :unknown), do: true
   def matches?(value, :string), do: is_binary(value)
   def matches?(value, :integer), do: is_integer(value)

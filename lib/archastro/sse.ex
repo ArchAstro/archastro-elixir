@@ -1,32 +1,32 @@
 # Copyright (c) 2026 ArchAstro Inc. Licensed under the MIT License.
 
-defmodule ArchAstro.SSE.Event do
+defmodule ArchAstro.SDK.SSE.Event do
   @moduledoc "A Server-Sent Event."
   defstruct [:event, :data, :id, :retry]
 
   @type t :: %__MODULE__{
           event: String.t() | nil,
-          data: ArchAstro.JSON.t(),
+          data: ArchAstro.SDK.JSON.t(),
           id: String.t() | nil,
           retry: non_neg_integer() | nil
         }
 end
 
-defmodule ArchAstro.SSE.Stream do
+defmodule ArchAstro.SDK.SSE.Stream do
   @moduledoc "Typed, lazy stream of decoded server-sent events."
   @enforce_keys [:source, :decoder]
   defstruct [:source, :decoder]
 
   @type t(event) :: %__MODULE__{
           source: Enumerable.t(),
-          decoder: (ArchAstro.SSE.Event.t() -> event)
+          decoder: (ArchAstro.SDK.SSE.Event.t() -> event)
         }
 
-  @spec new(Enumerable.t(), (ArchAstro.SSE.Event.t() -> event)) :: t(event) when event: var
+  @spec new(Enumerable.t(), (ArchAstro.SDK.SSE.Event.t() -> event)) :: t(event) when event: var
   def new(source, decoder), do: %__MODULE__{source: source, decoder: decoder}
 end
 
-defimpl Enumerable, for: ArchAstro.SSE.Stream do
+defimpl Enumerable, for: ArchAstro.SDK.SSE.Stream do
   def reduce(stream, acc, fun),
     do: Enumerable.reduce(Stream.map(stream.source, stream.decoder), acc, fun)
 
@@ -35,19 +35,19 @@ defimpl Enumerable, for: ArchAstro.SSE.Stream do
   def slice(_stream), do: {:error, __MODULE__}
 end
 
-defmodule ArchAstro.SSE do
+defmodule ArchAstro.SDK.SSE do
   @moduledoc false
 
   @type option(event) ::
-          ArchAstro.HTTP.option()
-          | {:decode_event, (ArchAstro.SSE.Event.t() -> event)}
+          ArchAstro.SDK.HTTP.option()
+          | {:decode_event, (ArchAstro.SDK.SSE.Event.t() -> event)}
 
   @spec stream(
-          ArchAstro.Client.t(),
-          ArchAstro.HTTP.method(),
+          ArchAstro.SDK.Client.t(),
+          ArchAstro.SDK.HTTP.method(),
           String.t(),
           [option(event)]
-        ) :: ArchAstro.SSE.Stream.t(event)
+        ) :: ArchAstro.SDK.SSE.Stream.t(event)
         when event: var
   def stream(client, method, path, opts \\ []) do
     source =
@@ -57,11 +57,11 @@ defmodule ArchAstro.SSE do
         &close/1
       )
 
-    ArchAstro.SSE.Stream.new(source, Keyword.get(opts, :decode_event, &Function.identity/1))
+    ArchAstro.SDK.SSE.Stream.new(source, Keyword.get(opts, :decode_event, &Function.identity/1))
   end
 
   defp open(client, method, path, opts) do
-    case ArchAstro.TokenServer.authorization(client.token_binding) do
+    case ArchAstro.SDK.TokenServer.authorization(client.token_binding) do
       {:ok, authorization} ->
         open(client, authorization, method, path, opts, true)
 
@@ -73,7 +73,7 @@ defmodule ArchAstro.SSE do
   defp open(client, authorization, method, path, opts, allow_refresh) do
     request_opts = [
       method: method,
-      url: ArchAstro.Query.append(client.base_url <> path, opts[:query]),
+      url: ArchAstro.SDK.Query.append(client.base_url <> path, opts[:query]),
       headers: [{"accept", "text/event-stream"} | authorization.headers],
       into: :self,
       retry: false
@@ -81,7 +81,7 @@ defmodule ArchAstro.SSE do
 
     request_opts =
       if Keyword.has_key?(opts, :body),
-        do: Keyword.put(request_opts, :json, ArchAstro.Codec.encode(opts[:body])),
+        do: Keyword.put(request_opts, :json, ArchAstro.SDK.Codec.encode(opts[:body])),
         else: request_opts
 
     request = Req.request!(client.request, request_opts)
@@ -90,7 +90,7 @@ defmodule ArchAstro.SSE do
       request.status == 401 and allow_refresh and authorization.refreshable ->
         Req.cancel_async_response(request)
 
-        case ArchAstro.TokenServer.refresh_if_current(
+        case ArchAstro.SDK.TokenServer.refresh_if_current(
                client.token_binding,
                authorization.generation
              ) do
@@ -103,10 +103,10 @@ defmodule ArchAstro.SSE do
 
       request.status in 200..299 ->
         Req.cancel_async_response(request)
-        raise ArchAstro.Error.transport(:invalid_event_stream_content_type)
+        raise ArchAstro.SDK.Error.transport(:invalid_event_stream_content_type)
 
       true ->
-        raise ArchAstro.Error.from_response(complete_error_response(request))
+        raise ArchAstro.SDK.Error.from_response(complete_error_response(request))
     end
   end
 
@@ -134,7 +134,7 @@ defmodule ArchAstro.SSE do
       {^ref, _payload} = message ->
         case Req.parse_message(state.response, message) do
           {:ok, chunks} -> consume_chunks(chunks, state)
-          {:error, reason} -> raise ArchAstro.Error.transport(reason)
+          {:error, reason} -> raise ArchAstro.SDK.Error.transport(reason)
           :unknown -> raise "Req rejected a message carrying its own async response reference"
         end
     end
@@ -166,7 +166,7 @@ defmodule ArchAstro.SSE do
   end
 
   @doc false
-  @spec parse_events(binary(), boolean()) :: {[ArchAstro.SSE.Event.t()], binary()}
+  @spec parse_events(binary(), boolean()) :: {[ArchAstro.SDK.SSE.Event.t()], binary()}
   def parse_events(buffer, strip_bom \\ true) do
     {events, rest, _consumed?} = consume_utf8(buffer, strip_bom)
     {events, rest}
@@ -240,7 +240,7 @@ defmodule ArchAstro.SSE do
           _ -> raw
         end
 
-      struct(ArchAstro.SSE.Event, %{
+      struct(ArchAstro.SDK.SSE.Event, %{
         event: if(fields[:event] in [nil, ""], do: "message", else: fields[:event]),
         data: data,
         id: fields[:id],

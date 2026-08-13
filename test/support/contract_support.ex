@@ -1,6 +1,6 @@
 # Copyright (c) 2026 ArchAstro Inc. Licensed under the MIT License.
 
-defmodule ArchAstro.ContractSupport do
+defmodule ArchAstro.SDK.ContractSupport do
   @moduledoc false
 
   @prism_name __MODULE__.Prism
@@ -17,12 +17,12 @@ defmodule ArchAstro.ContractSupport do
     ensure_prism!()
 
     {:ok, token_server} =
-      ArchAstro.TokenServer.Default.start_link(
+      ArchAstro.SDK.TokenServer.Default.start_link(
         mode: {:system_user, publishable_key: "pk_test-key", access_token: "test-token"}
       )
 
     {:ok, client} =
-      ArchAstro.Client.for_server(token_server,
+      ArchAstro.SDK.Client.for_server(token_server,
         base_url: prism_url(),
         req: Req.new(headers: headers, retry: false)
       )
@@ -70,8 +70,8 @@ defmodule ArchAstro.ContractSupport do
   @spec verify_stream(
           String.t(),
           [String.t()],
-          (ArchAstro.Client.t() -> Enumerable.t())
-        ) :: {:ok, [ArchAstro.SSE.Event.t()]} | {:error, stream_error()}
+          (ArchAstro.SDK.Client.t() -> Enumerable.t())
+        ) :: {:ok, [ArchAstro.SDK.SSE.Event.t()]} | {:error, stream_error()}
   def verify_stream(route, expected_events, stream_factory) when is_function(stream_factory, 1) do
     with_harness(fn %{"controlUrl" => control_url} ->
       actions = Enum.map(expected_events, &%{type: "autoEmit", event: &1})
@@ -84,11 +84,11 @@ defmodule ArchAstro.ContractSupport do
       )
 
       {:ok, token_server} =
-        ArchAstro.TokenServer.Default.start_link(
+        ArchAstro.SDK.TokenServer.Default.start_link(
           mode: {:system_user, publishable_key: "pk_test-key", access_token: "test-token"}
         )
 
-      {:ok, client} = ArchAstro.Client.for_server(token_server, base_url: control_url)
+      {:ok, client} = ArchAstro.SDK.Client.for_server(token_server, base_url: control_url)
       events = stream_factory.(client) |> Enum.to_list()
       actual_events = Enum.map(events, & &1.event)
 
@@ -100,7 +100,7 @@ defmodule ArchAstro.ContractSupport do
     end)
   end
 
-  @spec verify_stream_error(String.t(), (ArchAstro.Client.t() -> Enumerable.t())) ::
+  @spec verify_stream_error(String.t(), (ArchAstro.SDK.Client.t() -> Enumerable.t())) ::
           :ok | {:error, :stream_did_not_fail}
   def verify_stream_error(route, stream_factory) when is_function(stream_factory, 1) do
     with_harness(fn %{"controlUrl" => control_url} ->
@@ -115,17 +115,17 @@ defmodule ArchAstro.ContractSupport do
       )
 
       {:ok, token_server} =
-        ArchAstro.TokenServer.Default.start_link(
+        ArchAstro.SDK.TokenServer.Default.start_link(
           mode: {:system_user, publishable_key: "pk_test-key", access_token: "test-token"}
         )
 
-      {:ok, client} = ArchAstro.Client.for_server(token_server, base_url: control_url)
+      {:ok, client} = ArchAstro.SDK.Client.for_server(token_server, base_url: control_url)
 
       try do
         stream_factory.(client) |> Enum.to_list()
         {:error, :stream_did_not_fail}
       rescue
-        ArchAstro.Error -> :ok
+        ArchAstro.SDK.Error -> :ok
       end
     end)
   end
@@ -234,12 +234,12 @@ defmodule ArchAstro.ContractSupport do
     }
 
     {:ok, token_server} =
-      ArchAstro.TokenServer.Default.start_link(
+      ArchAstro.SDK.TokenServer.Default.start_link(
         mode: {:system_user, publishable_key: "pk_test-key", access_token: "test-token"}
       )
 
-    {:ok, client} = ArchAstro.Client.for_server(token_server, base_url: URI.to_string(base_uri))
-    {:ok, socket} = ArchAstro.Socket.start_link(client, socket_path: uri.path)
+    {:ok, client} = ArchAstro.SDK.Client.for_server(token_server, base_url: URI.to_string(base_uri))
+    {:ok, socket} = ArchAstro.SDK.Socket.start_link(client, socket_path: uri.path)
 
     try do
       push = fn joined_topic, event ->
@@ -283,7 +283,7 @@ defmodule ArchAstro.ContractSupport do
 
   defp start_prism! do
     if prism_stably_answers?() do
-      {:ok, _} = ArchAstro.ContractSupport.PrismServer.start(name: @prism_name)
+      {:ok, _} = ArchAstro.SDK.ContractSupport.PrismServer.start(name: @prism_name)
       :ok
     else
       bin = System.get_env("PRISM_BIN") || Path.join([repo_root(), "node_modules", ".bin", "prism"])
@@ -293,7 +293,7 @@ defmodule ArchAstro.ContractSupport do
       end
 
       {:ok, server} =
-        ArchAstro.ContractSupport.PrismServer.start(
+        ArchAstro.SDK.ContractSupport.PrismServer.start(
           name: @prism_name,
           executable: bin,
           args: [
@@ -355,7 +355,7 @@ defmodule ArchAstro.ContractSupport do
   defp prism_url, do: "http://127.0.0.1:" <> prism_port()
 end
 
-defmodule ArchAstro.ContractSupport.PrismServer do
+defmodule ArchAstro.SDK.ContractSupport.PrismServer do
   @moduledoc false
   use GenServer
 

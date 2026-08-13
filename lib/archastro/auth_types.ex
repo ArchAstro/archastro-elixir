@@ -1,6 +1,6 @@
 # Copyright (c) 2026 ArchAstro Inc. Licensed under the MIT License.
 
-defmodule ArchAstro.Auth.TokenSet do
+defmodule ArchAstro.SDK.Auth.TokenSet do
   @moduledoc "Rotating bearer credentials returned by login and refresh operations."
   @enforce_keys [:access_token]
   defstruct [:access_token, :refresh_token, :expires_at, :expires_in, :user]
@@ -10,10 +10,11 @@ defmodule ArchAstro.Auth.TokenSet do
           refresh_token: String.t() | nil,
           expires_at: DateTime.t() | integer() | nil,
           expires_in: non_neg_integer() | nil,
-          user: ArchAstro.Types.User.t() | nil
+          user: ArchAstro.SDK.Types.User.t() | nil
         }
 
-  @type input :: ArchAstro.JSON.object() | %{optional(atom()) => ArchAstro.JSON.t()} | struct()
+  @type input ::
+          ArchAstro.SDK.JSON.object() | %{optional(atom()) => ArchAstro.SDK.JSON.t()} | struct()
 
   @spec from_map(input()) :: t()
   def from_map(%_module{} = data), do: data |> Map.from_struct() |> from_map()
@@ -51,7 +52,7 @@ defmodule ArchAstro.Auth.TokenSet do
          match?(%DateTime{}, tokens.expires_at)) and
       (is_nil(tokens.expires_in) or
          (is_integer(tokens.expires_in) and tokens.expires_in >= 0)) and
-      (is_nil(tokens.user) or match?(%ArchAstro.Types.User{}, tokens.user))
+      (is_nil(tokens.user) or match?(%ArchAstro.SDK.Types.User{}, tokens.user))
   end
 
   @spec normalize(t()) :: t()
@@ -83,17 +84,17 @@ defmodule ArchAstro.Auth.TokenSet do
     do: raise(ArgumentError, "expires_in must be a non-negative integer")
 
   defp normalize_user(nil), do: nil
-  defp normalize_user(%ArchAstro.Types.User{} = user), do: user
-  defp normalize_user(user) when is_map(user), do: ArchAstro.Types.User.from_map(user)
+  defp normalize_user(%ArchAstro.SDK.Types.User{} = user), do: user
+  defp normalize_user(user) when is_map(user), do: ArchAstro.SDK.Types.User.from_map(user)
   defp normalize_user(_user), do: raise(ArgumentError, "token user must be a user object")
 end
 
-defimpl Inspect, for: ArchAstro.Auth.TokenSet do
+defimpl Inspect, for: ArchAstro.SDK.Auth.TokenSet do
   import Inspect.Algebra
 
   def inspect(value, opts) do
     concat([
-      "#ArchAstro.Auth.TokenSet<access_token: [REDACTED], refresh_token: ",
+      "#ArchAstro.SDK.Auth.TokenSet<access_token: [REDACTED], refresh_token: ",
       if(value.refresh_token, do: "[REDACTED]", else: "nil"),
       ", expires_at: ",
       to_doc(value.expires_at, opts),
@@ -102,7 +103,7 @@ defimpl Inspect, for: ArchAstro.Auth.TokenSet do
   end
 end
 
-defmodule ArchAstro.Authorization do
+defmodule ArchAstro.SDK.Authorization do
   @moduledoc "Resolved request authorization returned by a token-server provider."
   @enforce_keys [:headers, :generation, :refreshable]
   defstruct [:headers, :generation, :refreshable, :expires_at]
@@ -115,8 +116,8 @@ defmodule ArchAstro.Authorization do
         }
 end
 
-defimpl Inspect, for: ArchAstro.Authorization do
+defimpl Inspect, for: ArchAstro.SDK.Authorization do
   def inspect(value, _opts),
     do:
-      "#ArchAstro.Authorization<headers: [REDACTED], generation: #{value.generation}, refreshable: #{value.refreshable}>"
+      "#ArchAstro.SDK.Authorization<headers: [REDACTED], generation: #{value.generation}, refreshable: #{value.refreshable}>"
 end

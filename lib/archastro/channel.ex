@@ -1,7 +1,7 @@
 # Copyright (c) 2026 ArchAstro Inc. Licensed under the MIT License.
 
-defmodule ArchAstro.Channel do
-  @moduledoc "A joined Phoenix Channel owned by an `ArchAstro.Socket` process."
+defmodule ArchAstro.SDK.Channel do
+  @moduledoc "A joined Phoenix Channel owned by an `ArchAstro.SDK.Socket` process."
 
   @enforce_keys [:socket, :topic, :module]
   defstruct [:socket, :topic, :module, :join_response]
@@ -10,27 +10,27 @@ defmodule ArchAstro.Channel do
           socket: GenServer.server(),
           topic: String.t(),
           module: module(),
-          join_response: ArchAstro.JSON.t() | struct()
+          join_response: ArchAstro.SDK.JSON.t() | struct()
         }
 
   @spec join(
           GenServer.server(),
           String.t(),
-          ArchAstro.JSON.object() | struct(),
+          ArchAstro.SDK.JSON.object() | struct(),
           module(),
-          ArchAstro.Codec.descriptor(),
+          ArchAstro.SDK.Codec.descriptor(),
           timeout()
-        ) :: {:ok, t()} | {:error, ArchAstro.Error.reason()}
+        ) :: {:ok, t()} | {:error, ArchAstro.SDK.Error.reason()}
   def join(socket, topic, payload, module, descriptor, timeout \\ 5_000),
     do: GenServer.call(socket, {:archastro_join, topic, payload, module, descriptor}, timeout)
 
   @spec push(
           t(),
           String.t(),
-          ArchAstro.JSON.object() | struct(),
-          ArchAstro.Codec.descriptor(),
+          ArchAstro.SDK.JSON.object() | struct(),
+          ArchAstro.SDK.Codec.descriptor(),
           timeout()
-        ) :: {:ok, ArchAstro.JSON.t() | struct() | :ok} | {:error, ArchAstro.Error.reason()}
+        ) :: {:ok, ArchAstro.SDK.JSON.t() | struct() | :ok} | {:error, ArchAstro.SDK.Error.reason()}
   def push(%__MODULE__{} = channel, event, payload, descriptor, timeout \\ 5_000),
     do:
       GenServer.call(
@@ -39,7 +39,7 @@ defmodule ArchAstro.Channel do
         timeout
       )
 
-  @spec subscribe(t(), String.t(), pid(), ArchAstro.Codec.descriptor()) :: :ok
+  @spec subscribe(t(), String.t(), pid(), ArchAstro.SDK.Codec.descriptor()) :: :ok
   def subscribe(%__MODULE__{} = channel, event, subscriber, descriptor)
       when is_pid(subscriber) do
     GenServer.call(
@@ -48,17 +48,17 @@ defmodule ArchAstro.Channel do
     )
   end
 
-  @spec leave(t(), timeout()) :: :ok | {:error, ArchAstro.Error.reason()}
+  @spec leave(t(), timeout()) :: :ok | {:error, ArchAstro.SDK.Error.reason()}
   def leave(%__MODULE__{} = channel, timeout \\ 5_000),
     do: GenServer.call(channel.socket, {:archastro_leave, channel.topic}, timeout)
 end
 
-defimpl Inspect, for: ArchAstro.Channel do
+defimpl Inspect, for: ArchAstro.SDK.Channel do
   import Inspect.Algebra
 
   def inspect(channel, opts) do
     concat([
-      "#ArchAstro.Channel<topic: ",
+      "#ArchAstro.SDK.Channel<topic: ",
       to_doc(channel.topic, opts),
       ", module: ",
       to_doc(channel.module, opts),
