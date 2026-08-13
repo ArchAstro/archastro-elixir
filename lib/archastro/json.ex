@@ -1,6 +1,6 @@
 # Copyright (c) 2026 ArchAstro Inc. Licensed under the MIT License.
 
-defmodule ArchAstro.JSON do
+defmodule ArchAstro.SDK.JSON do
   @moduledoc "Recursive types for values accepted by and decoded from JSON."
 
   @type scalar :: nil | boolean() | number() | String.t()

@@ -1,6 +1,6 @@
 # Copyright (c) 2026 ArchAstro Inc. Licensed under the MIT License.
 
-defmodule ArchAstro.Error do
+defmodule ArchAstro.SDK.Error do
   @moduledoc "Typed REST API or transport error."
   defexception [:message, :status, :code, :details, :request_id, :reason]
 
@@ -11,7 +11,7 @@ defmodule ArchAstro.Error do
           message: String.t(),
           status: integer() | nil,
           code: String.t() | nil,
-          details: ArchAstro.JSON.t() | nil,
+          details: ArchAstro.SDK.JSON.t() | nil,
           request_id: String.t() | nil,
           reason: transport_reason() | nil
         }
@@ -40,7 +40,7 @@ defmodule ArchAstro.Error do
   def transport(reason),
     do: %__MODULE__{message: "ArchAstro transport error", reason: reason}
 
-  @spec channel(ArchAstro.JSON.t() | transport_reason() | t()) :: t()
+  @spec channel(ArchAstro.SDK.JSON.t() | transport_reason() | t()) :: t()
   def channel(%__MODULE__{} = error), do: error
   def channel({:error, payload}), do: channel(payload)
 

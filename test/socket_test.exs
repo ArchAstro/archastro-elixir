@@ -1,7 +1,7 @@
-defmodule ArchAstro.SocketTest do
+defmodule ArchAstro.SDK.SocketTest do
   use ExUnit.Case, async: true
 
-  alias ArchAstro.Auth.TokenSet
+  alias ArchAstro.SDK.Auth.TokenSet
 
   test "concurrent joins to one topic retain and reply to every waiter" do
     first_tag = make_ref()
@@ -13,23 +13,23 @@ defmodule ArchAstro.SocketTest do
       |> Slipstream.Socket.assign(:pending_joins, %{})
 
     assert {:noreply, pending_socket} =
-             ArchAstro.Socket.handle_call(
+             ArchAstro.SDK.Socket.handle_call(
                {:archastro_join, "room:1", %{}, __MODULE__, {:object, []}},
                {self(), first_tag},
                socket
              )
 
     assert {:noreply, coalesced_socket} =
-             ArchAstro.Socket.handle_call(
+             ArchAstro.SDK.Socket.handle_call(
                {:archastro_join, "room:1", %{}, __MODULE__, {:object, []}},
                {self(), second_tag},
                pending_socket
              )
 
     assert length(coalesced_socket.assigns.pending_joins["room:1"].froms) == 2
-    assert {:ok, _joined_socket} = ArchAstro.Socket.handle_join("room:1", %{}, coalesced_socket)
-    assert_receive {^first_tag, {:ok, %ArchAstro.Channel{topic: "room:1"}}}
-    assert_receive {^second_tag, {:ok, %ArchAstro.Channel{topic: "room:1"}}}
+    assert {:ok, _joined_socket} = ArchAstro.SDK.Socket.handle_join("room:1", %{}, coalesced_socket)
+    assert_receive {^first_tag, {:ok, %ArchAstro.SDK.Channel{topic: "room:1"}}}
+    assert_receive {^second_tag, {:ok, %ArchAstro.SDK.Channel{topic: "room:1"}}}
   end
 
   test "refreshes expired credentials before channel connection or reconnect" do
@@ -42,21 +42,21 @@ defmodule ArchAstro.SocketTest do
 
     server =
       start_supervised!(
-        {ArchAstro.TokenServer.Default,
+        {ArchAstro.SDK.TokenServer.Default,
          mode: {:sessions, publishable_key: "pk"},
          base_url: "http://test",
          req: Req.new(plug: plug, retry: false)}
       )
 
     assert :ok =
-             ArchAstro.TokenServer.put_session(server, "session", %TokenSet{
+             ArchAstro.SDK.TokenServer.put_session(server, "session", %TokenSet{
                access_token: "expired",
                refresh_token: "refresh",
                expires_at: DateTime.add(DateTime.utc_now(), -60, :second)
              })
 
-    assert {:ok, client} = ArchAstro.Client.for_session(server, "session")
-    assert {:ok, authorization} = ArchAstro.Socket.ensure_fresh_authorization(client)
+    assert {:ok, client} = ArchAstro.SDK.Client.for_session(server, "session")
+    assert {:ok, authorization} = ArchAstro.SDK.Socket.ensure_fresh_authorization(client)
     assert {"authorization", "Bearer fresh"} in authorization.headers
     assert Agent.get(counter, & &1) == 1
   end
@@ -70,7 +70,7 @@ defmodule ArchAstro.SocketTest do
         "1" => %{from: {self(), tag}, descriptor: :string}
       })
 
-    cleared = ArchAstro.Socket.fail_pending_pushes(socket, :transport_closed)
+    cleared = ArchAstro.SDK.Socket.fail_pending_pushes(socket, :transport_closed)
     assert cleared.assigns.pending_pushes == %{}
     assert_receive {^tag, {:error, :transport_closed}}
   end
@@ -86,13 +86,13 @@ defmodule ArchAstro.SocketTest do
         "2" => %{from: {self(), retained_tag}, topic: "room:2", descriptor: :string}
       })
 
-    updated = ArchAstro.Socket.fail_topic_pushes(socket, "room:1", {:topic_closed, :server})
+    updated = ArchAstro.SDK.Socket.fail_topic_pushes(socket, "room:1", {:topic_closed, :server})
     assert Map.keys(updated.assigns.pending_pushes) == ["2"]
     assert_receive {^closed_tag, {:error, {:topic_closed, :server}}}
     refute_received {^retained_tag, _reply}
   end
 
-  test "normalizes Phoenix JSON error replies to ArchAstro.Error" do
+  test "normalizes Phoenix JSON error replies to ArchAstro.SDK.Error" do
     tag = make_ref()
 
     socket =
@@ -102,7 +102,7 @@ defmodule ArchAstro.SocketTest do
       })
 
     assert {:ok, updated} =
-             ArchAstro.Socket.handle_reply(
+             ArchAstro.SDK.Socket.handle_reply(
                "1",
                {:error, %{"code" => "unknown_event", "reason" => "not allowed"}},
                socket
@@ -110,12 +110,13 @@ defmodule ArchAstro.SocketTest do
 
     assert updated.assigns.pending_pushes == %{}
 
-    assert_receive {^tag, {:error, %ArchAstro.Error{code: "unknown_event", message: "not allowed"}}}
+    assert_receive {^tag,
+                    {:error, %ArchAstro.SDK.Error{code: "unknown_event", message: "not allowed"}}}
   end
 
   test "leave removes and fences the local channel before replying" do
     tag = make_ref()
-    channel = %ArchAstro.Channel{socket: self(), topic: "room:1", module: __MODULE__}
+    channel = %ArchAstro.SDK.Channel{socket: self(), topic: "room:1", module: __MODULE__}
 
     socket =
       Slipstream.Socket.new()
@@ -134,18 +135,18 @@ defmodule ArchAstro.SocketTest do
       |> Slipstream.Socket.assign(:subscriptions, %{})
 
     assert {:reply, :ok, left_socket} =
-             ArchAstro.Socket.handle_call({:archastro_leave, "room:1"}, {self(), tag}, socket)
+             ArchAstro.SDK.Socket.handle_call({:archastro_leave, "room:1"}, {self(), tag}, socket)
 
     refute Map.has_key?(left_socket.assigns.channels, "room:1")
     assert Map.has_key?(left_socket.assigns.pending_leaves, "room:1")
 
-    assert {:ok, acknowledged_socket} = ArchAstro.Socket.handle_leave("room:1", left_socket)
+    assert {:ok, acknowledged_socket} = ArchAstro.SDK.Socket.handle_leave("room:1", left_socket)
     assert acknowledged_socket.assigns.pending_leaves == %{}
   end
 
   test "join waits behind an acknowledged leave instead of returning a stale channel" do
     tag = make_ref()
-    channel = %ArchAstro.Channel{socket: self(), topic: "room:1", module: __MODULE__}
+    channel = %ArchAstro.SDK.Channel{socket: self(), topic: "room:1", module: __MODULE__}
 
     socket =
       Slipstream.Socket.new()
@@ -154,7 +155,7 @@ defmodule ArchAstro.SocketTest do
       |> Slipstream.Socket.assign(:pending_leaves, %{"room:1" => [{self(), make_ref()}]})
 
     assert {:noreply, waiting_socket} =
-             ArchAstro.Socket.handle_call(
+             ArchAstro.SDK.Socket.handle_call(
                {:archastro_join, "room:1", %{}, __MODULE__, {:object, []}},
                {self(), tag},
                socket
@@ -165,7 +166,7 @@ defmodule ArchAstro.SocketTest do
   end
 
   test "rejoins established topics after reconnect with their original payload" do
-    channel = %ArchAstro.Channel{socket: self(), topic: "room:1", module: __MODULE__}
+    channel = %ArchAstro.SDK.Channel{socket: self(), topic: "room:1", module: __MODULE__}
 
     socket =
       Slipstream.Socket.new()
@@ -182,7 +183,7 @@ defmodule ArchAstro.SocketTest do
       |> Slipstream.Socket.assign(:pending_joins, %{})
       |> Slipstream.Socket.assign(:pending_leaves, %{})
 
-    assert {:ok, _rejoining_socket} = ArchAstro.Socket.handle_connect(socket)
+    assert {:ok, _rejoining_socket} = ArchAstro.SDK.Socket.handle_connect(socket)
 
     assert_receive {:__slipstream_command__,
                     %Slipstream.Commands.JoinTopic{
@@ -192,7 +193,7 @@ defmodule ArchAstro.SocketTest do
   end
 
   test "leave while disconnected does not create an acknowledgement fence" do
-    channel = %ArchAstro.Channel{socket: self(), topic: "room:1", module: __MODULE__}
+    channel = %ArchAstro.SDK.Channel{socket: self(), topic: "room:1", module: __MODULE__}
 
     socket =
       Slipstream.Socket.new()
@@ -202,7 +203,7 @@ defmodule ArchAstro.SocketTest do
       |> Slipstream.Socket.assign(:subscriptions, %{})
 
     assert {:reply, :ok, left_socket} =
-             ArchAstro.Socket.handle_call(
+             ArchAstro.SDK.Socket.handle_call(
                {:archastro_leave, "room:1"},
                {self(), make_ref()},
                socket

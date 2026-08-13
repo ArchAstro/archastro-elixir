@@ -1,4 +1,4 @@
-defmodule ArchAstro.MixProject do
+defmodule ArchAstro.SDK.MixProject do
   use Mix.Project
 
   def project do

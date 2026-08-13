@@ -1,9 +1,9 @@
 # Copyright (c) 2026 ArchAstro Inc. Licensed under the MIT License.
 
-defmodule ArchAstro.Query do
+defmodule ArchAstro.SDK.Query do
   @moduledoc false
 
-  @spec append(String.t(), ArchAstro.JSON.object() | struct() | nil) :: String.t()
+  @spec append(String.t(), ArchAstro.SDK.JSON.object() | struct() | nil) :: String.t()
   def append(url, nil), do: url
 
   def append(url, value) do
@@ -13,10 +13,10 @@ defmodule ArchAstro.Query do
     end
   end
 
-  @spec encode(ArchAstro.JSON.object() | struct()) :: String.t()
+  @spec encode(ArchAstro.SDK.JSON.object() | struct()) :: String.t()
   def encode(value) do
     value
-    |> ArchAstro.Codec.encode()
+    |> ArchAstro.SDK.Codec.encode()
     |> Enum.flat_map(fn
       {_key, :__archastro_unset__} -> []
       {key, values} when is_list(values) -> Enum.map(values, &{key, scalar(&1)})

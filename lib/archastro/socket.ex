@@ -1,6 +1,6 @@
 # Copyright (c) 2026 ArchAstro Inc. Licensed under the MIT License.
 
-defmodule ArchAstro.Socket do
+defmodule ArchAstro.SDK.Socket do
   @moduledoc """
   Supervised Phoenix Channels client backed by Slipstream.
 
@@ -10,7 +10,7 @@ defmodule ArchAstro.Socket do
 
   use Slipstream
 
-  alias ArchAstro.{Channel, Client, Codec, Error, TokenServer}
+  alias ArchAstro.SDK.{Channel, Client, Codec, Error, TokenServer}
 
   @type option ::
           {:name, GenServer.name()}
@@ -84,7 +84,7 @@ defmodule ArchAstro.Socket do
   end
 
   @doc false
-  @spec fail_pending_pushes(Slipstream.Socket.t(), ArchAstro.Error.reason()) ::
+  @spec fail_pending_pushes(Slipstream.Socket.t(), ArchAstro.SDK.Error.reason()) ::
           Slipstream.Socket.t()
   def fail_pending_pushes(socket, reason) do
     Enum.each(socket.assigns.pending_pushes, fn {_ref, request} ->
@@ -270,7 +270,7 @@ defmodule ArchAstro.Socket do
   end
 
   @doc false
-  @spec fail_topic_pushes(Slipstream.Socket.t(), String.t(), ArchAstro.Error.reason()) ::
+  @spec fail_topic_pushes(Slipstream.Socket.t(), String.t(), ArchAstro.SDK.Error.reason()) ::
           Slipstream.Socket.t()
   def fail_topic_pushes(socket, topic, reason) do
     {failed, retained} =
@@ -327,7 +327,7 @@ defmodule ArchAstro.Socket do
 
   @doc false
   @spec ensure_fresh_authorization(Client.t()) ::
-          {:ok, ArchAstro.Authorization.t()} | {:error, ArchAstro.Error.reason()}
+          {:ok, ArchAstro.SDK.Authorization.t()} | {:error, ArchAstro.SDK.Error.reason()}
   def ensure_fresh_authorization(client) do
     with {:ok, authorization} <- TokenServer.authorization(client.token_binding) do
       if expired?(authorization) do

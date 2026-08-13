@@ -1,19 +1,19 @@
 # Copyright (c) 2026 ArchAstro Inc. Licensed under the MIT License.
 
-defmodule ArchAstro.HTTP do
+defmodule ArchAstro.SDK.HTTP do
   @moduledoc false
 
-  alias ArchAstro.{Client, Codec, Error, Query, TokenServer}
+  alias ArchAstro.SDK.{Client, Codec, Error, Query, TokenServer}
 
   @type method :: :get | :post | :put | :patch | :delete
   @type option ::
-          {:body, ArchAstro.JSON.t() | struct()}
-          | {:query, ArchAstro.JSON.object() | struct()}
+          {:body, ArchAstro.SDK.JSON.t() | struct()}
+          | {:query, ArchAstro.SDK.JSON.object() | struct()}
           | {:decode, Codec.descriptor()}
           | {:raw, boolean()}
 
   @spec request(Client.t(), method(), String.t(), [option()]) ::
-          {:ok, ArchAstro.JSON.t() | struct() | Req.Response.t() | :ok}
+          {:ok, ArchAstro.SDK.JSON.t() | struct() | Req.Response.t() | :ok}
           | {:error, Error.reason()}
   def request(%Client{} = client, method, path, opts \\ []) do
     with {:ok, authorization} <- TokenServer.authorization(client.token_binding) do
