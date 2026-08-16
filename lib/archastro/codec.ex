@@ -73,6 +73,19 @@ defmodule ArchAstro.SDK.Codec do
   def encode(%DateTime{} = value), do: DateTime.to_iso8601(value)
   def encode(%Date{} = value), do: Date.to_iso8601(value)
 
+  def encode(%NaiveDateTime{} = value) do
+    raise ArgumentError,
+          "cannot encode NaiveDateTime #{inspect(value)}: the API requires an " <>
+            "ISO 8601 datetime with a UTC offset; convert it with " <>
+            "DateTime.from_naive!(value, \"Etc/UTC\") first"
+  end
+
+  def encode(%Time{} = value) do
+    raise ArgumentError,
+          "cannot encode Time #{inspect(value)}: the API has no time-of-day wire " <>
+            "format; send a full DateTime instead"
+  end
+
   def encode(%module{} = value) do
     if Code.ensure_loaded?(module) and function_exported?(module, :to_map, 1),
       do: module.to_map(value),
