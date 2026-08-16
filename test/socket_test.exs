@@ -212,4 +212,120 @@ defmodule ArchAstro.SDK.SocketTest do
     assert left_socket.assigns.pending_leaves == %{}
     refute Map.has_key?(left_socket.assigns.channels, "room:1")
   end
+
+  describe "decode failures do not crash the socket" do
+    setup do
+      handler_id = "socket-decode-failure-#{inspect(make_ref())}"
+
+      :telemetry.attach(
+        handler_id,
+        [:archastro, :channel, :decode_failure],
+        fn event, _measurements, metadata, pid -> send(pid, {:telemetry, event, metadata}) end,
+        self()
+      )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+      :ok
+    end
+
+    test "a malformed broadcast is dropped with telemetry instead of raising" do
+      channel = %ArchAstro.SDK.Channel{socket: self(), topic: "room:1", module: __MODULE__}
+
+      socket =
+        Slipstream.Socket.new()
+        |> Slipstream.Socket.assign(:channels, %{"room:1" => channel})
+        |> Slipstream.Socket.assign(:subscriptions, %{
+          {"room:1", "evt"} => [%{subscriber: self(), descriptor: :string}]
+        })
+
+      assert {:ok, _socket} =
+               ArchAstro.SDK.Socket.handle_message("room:1", "evt", %{"bad" => true}, socket)
+
+      refute_received {:archastro_channel, _channel, _event, _payload}
+
+      assert_received {:telemetry, [:archastro, :channel, :decode_failure],
+                       %{topic: "room:1", event: "evt", kind: :message}}
+    end
+
+    test "a well-formed broadcast is still delivered" do
+      channel = %ArchAstro.SDK.Channel{socket: self(), topic: "room:1", module: __MODULE__}
+
+      socket =
+        Slipstream.Socket.new()
+        |> Slipstream.Socket.assign(:channels, %{"room:1" => channel})
+        |> Slipstream.Socket.assign(:subscriptions, %{
+          {"room:1", "evt"} => [%{subscriber: self(), descriptor: :string}]
+        })
+
+      assert {:ok, _socket} =
+               ArchAstro.SDK.Socket.handle_message("room:1", "evt", "hello", socket)
+
+      assert_received {:archastro_channel, ^channel, "evt", "hello"}
+    end
+
+    test "an undecodable reply fails only that push" do
+      tag = make_ref()
+
+      socket =
+        Slipstream.Socket.new()
+        |> Slipstream.Socket.assign(:pending_pushes, %{
+          "1" => %{from: {self(), tag}, topic: "room:1", descriptor: :string}
+        })
+
+      assert {:ok, updated} =
+               ArchAstro.SDK.Socket.handle_reply(
+                 "1",
+                 %{"status" => "ok", "response" => 42},
+                 socket
+               )
+
+      assert updated.assigns.pending_pushes == %{}
+      assert_receive {^tag, {:error, %ArchAstro.SDK.Error{code: "decode_failure"}}}
+
+      assert_received {:telemetry, [:archastro, :channel, :decode_failure],
+                       %{topic: "room:1", kind: :reply}}
+    end
+
+    test "an empty error reply resolves the push as a channel error" do
+      tag = make_ref()
+
+      socket =
+        Slipstream.Socket.new()
+        |> Slipstream.Socket.assign(:pending_pushes, %{
+          "1" => %{from: {self(), tag}, topic: "room:1", descriptor: :string}
+        })
+
+      assert {:ok, updated} = ArchAstro.SDK.Socket.handle_reply("1", :error, socket)
+
+      assert updated.assigns.pending_pushes == %{}
+      assert_receive {^tag, {:error, %ArchAstro.SDK.Error{} = error}}
+      assert error.message == "ArchAstro channel operation failed"
+    end
+
+    test "an undecodable join response fails the join instead of the socket" do
+      tag = make_ref()
+
+      socket =
+        Slipstream.Socket.new()
+        |> Slipstream.Socket.assign(:channels, %{})
+        |> Slipstream.Socket.assign(:pending_joins, %{
+          "room:1" => %{
+            froms: [{self(), tag}],
+            payload: %{},
+            module: __MODULE__,
+            descriptor: :string
+          }
+        })
+
+      assert {:ok, updated} =
+               ArchAstro.SDK.Socket.handle_join("room:1", %{"bad" => true}, socket)
+
+      assert updated.assigns.pending_joins == %{}
+      refute Map.has_key?(updated.assigns.channels, "room:1")
+      assert_receive {^tag, {:error, %ArchAstro.SDK.Error{code: "decode_failure"}}}
+
+      assert_received {:telemetry, [:archastro, :channel, :decode_failure],
+                       %{topic: "room:1", kind: :join}}
+    end
+  end
 end
