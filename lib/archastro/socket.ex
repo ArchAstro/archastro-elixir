@@ -211,19 +211,28 @@ defmodule ArchAstro.SDK.Socket do
         {:ok, assign(socket, :pending_joins, pending_joins)}
 
       {pending, pending_joins} ->
-        channel = %Channel{
-          socket: self(),
-          topic: topic,
-          module: pending.module,
-          join_response: Codec.decode(response, pending.descriptor)
-        }
+        case safe_decode(response, pending.descriptor, %{topic: topic, kind: :join}) do
+          {:ok, join_response} ->
+            channel = %Channel{
+              socket: self(),
+              topic: topic,
+              module: pending.module,
+              join_response: join_response
+            }
 
-        Enum.each(pending.froms, &GenServer.reply(&1, {:ok, channel}))
+            Enum.each(pending.froms, &GenServer.reply(&1, {:ok, channel}))
 
-        {:ok,
-         socket
-         |> assign(:pending_joins, pending_joins)
-         |> update(:channels, &Map.put(&1, topic, channel))}
+            {:ok,
+             socket
+             |> assign(:pending_joins, pending_joins)
+             |> update(:channels, &Map.put(&1, topic, channel))}
+
+          {:error, error} ->
+            Enum.each(pending.froms, &GenServer.reply(&1, {:error, error}))
+            socket = assign(socket, :pending_joins, pending_joins)
+            socket = if joined?(socket, topic), do: leave(socket, topic), else: socket
+            {:ok, socket}
+        end
     end
   end
 
@@ -234,7 +243,7 @@ defmodule ArchAstro.SDK.Socket do
         {:ok, assign(socket, :pending_pushes, pending)}
 
       {request, pending} ->
-        GenServer.reply(request.from, decode_reply(reply, request.descriptor))
+        GenServer.reply(request.from, decode_reply(reply, request))
         {:ok, assign(socket, :pending_pushes, pending)}
     end
   end
@@ -244,8 +253,17 @@ defmodule ArchAstro.SDK.Socket do
     channel = socket.assigns.channels[topic]
 
     Enum.each(socket.assigns.subscriptions[{topic, event}] || [], fn subscription ->
-      decoded = Codec.decode(message, subscription.descriptor)
-      send(subscription.subscriber, {:archastro_channel, channel, event, decoded})
+      case safe_decode(message, subscription.descriptor, %{
+             topic: topic,
+             event: event,
+             kind: :message
+           }) do
+        {:ok, decoded} ->
+          send(subscription.subscriber, {:archastro_channel, channel, event, decoded})
+
+        {:error, _error} ->
+          :ok
+      end
     end)
 
     {:ok, socket}
@@ -362,14 +380,35 @@ defmodule ArchAstro.SDK.Socket do
     end)
   end
 
-  defp decode_reply({:ok, value}, descriptor), do: {:ok, Codec.decode(value, descriptor)}
-  defp decode_reply({:error, reason}, _descriptor), do: {:error, Error.channel(reason)}
+  defp decode_reply({:ok, value}, request), do: safe_decode_reply(value, request)
+  defp decode_reply({:error, reason}, _request), do: {:error, Error.channel(reason)}
 
-  defp decode_reply(%{"status" => "ok", "response" => value}, descriptor),
-    do: {:ok, Codec.decode(value, descriptor)}
+  # Slipstream collapses a payload-less `{:reply, :error, socket}` to the bare
+  # atom :error; it is an error verdict, not a payload to decode.
+  defp decode_reply(:error, _request), do: {:error, Error.channel(%{})}
 
-  defp decode_reply(%{"status" => "error", "response" => reason}, _descriptor),
+  defp decode_reply(%{"status" => "ok", "response" => value}, request),
+    do: safe_decode_reply(value, request)
+
+  defp decode_reply(%{"status" => "error", "response" => reason}, _request),
     do: {:error, Error.channel(reason)}
 
-  defp decode_reply(value, descriptor), do: {:ok, Codec.decode(value, descriptor)}
+  defp decode_reply(value, request), do: safe_decode_reply(value, request)
+
+  defp safe_decode_reply(value, request),
+    do: safe_decode(value, request.descriptor, %{topic: request.topic, kind: :reply})
+
+  defp safe_decode(value, descriptor, metadata) do
+    {:ok, Codec.decode(value, descriptor)}
+  rescue
+    exception ->
+      :telemetry.execute([:archastro, :channel, :decode_failure], %{}, metadata)
+
+      {:error,
+       %Error{
+         message: "ArchAstro channel payload failed to decode",
+         code: "decode_failure",
+         reason: exception
+       }}
+  end
 end
