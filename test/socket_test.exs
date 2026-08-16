@@ -213,6 +213,72 @@ defmodule ArchAstro.SDK.SocketTest do
     refute Map.has_key?(left_socket.assigns.channels, "room:1")
   end
 
+  describe "pending entry sweep" do
+    test "sweeps pushes and joins that were never acknowledged, keeping fresh ones" do
+      stale_push_tag = make_ref()
+      fresh_push_tag = make_ref()
+      stale_join_tag = make_ref()
+
+      now = System.monotonic_time(:millisecond)
+      stale = now - 200_000
+
+      socket =
+        Slipstream.Socket.new()
+        |> Slipstream.Socket.assign(:channels, %{})
+        |> Slipstream.Socket.assign(:subscriptions, %{})
+        |> Slipstream.Socket.assign(:pending_pushes, %{
+          "1" => %{
+            from: {self(), stale_push_tag},
+            topic: "room:1",
+            descriptor: :string,
+            inserted_at: stale
+          },
+          "2" => %{
+            from: {self(), fresh_push_tag},
+            topic: "room:1",
+            descriptor: :string,
+            inserted_at: now
+          }
+        })
+        |> Slipstream.Socket.assign(:pending_joins, %{
+          "room:2" => %{
+            froms: [{self(), stale_join_tag}],
+            payload: %{},
+            module: __MODULE__,
+            descriptor: :string,
+            inserted_at: stale
+          }
+        })
+
+      assert {:noreply, swept} =
+               ArchAstro.SDK.Socket.handle_info(:archastro_sweep_pending, socket)
+
+      assert Map.keys(swept.assigns.pending_pushes) == ["2"]
+      assert swept.assigns.pending_joins == %{}
+
+      assert_receive {^stale_push_tag, {:error, %ArchAstro.SDK.Error{code: "no_reply"}}}
+      assert_receive {^stale_join_tag, {:error, %ArchAstro.SDK.Error{code: "no_reply"}}}
+      refute_received {^fresh_push_tag, _reply}
+    end
+
+    test "new pushes and queued joins carry an insertion timestamp" do
+      socket =
+        Slipstream.Socket.new()
+        |> Slipstream.Socket.assign(:channels, %{})
+        |> Slipstream.Socket.assign(:pending_joins, %{})
+        |> Slipstream.Socket.assign(:pending_leaves, %{"room:1" => true})
+
+      assert {:noreply, queued} =
+               ArchAstro.SDK.Socket.handle_call(
+                 {:archastro_join, "room:1", %{}, __MODULE__, {:object, []}},
+                 {self(), make_ref()},
+                 socket
+               )
+
+      assert is_integer(queued.assigns.pending_joins["room:1"].inserted_at)
+    end
+  end
+
   describe "decode failures do not crash the socket" do
     setup do
       handler_id = "socket-decode-failure-#{inspect(make_ref())}"

@@ -12,6 +12,13 @@ defmodule ArchAstro.SDK.Socket do
 
   alias ArchAstro.SDK.{Channel, Client, Codec, Error, TokenServer}
 
+  # Pushes and joins the server never acknowledges (fire-and-forget events,
+  # callers that give up) would otherwise accumulate forever on long-lived
+  # sockets. Entries are swept once they are older than a full interval, so
+  # the effective grace period is one to two intervals — far above any sane
+  # Channel call timeout (default 5s).
+  @pending_sweep_interval_msec 60_000
+
   @type option ::
           {:name, GenServer.name()}
           | {:socket_path, String.t()}
@@ -29,6 +36,8 @@ defmodule ArchAstro.SDK.Socket do
   @impl Slipstream
   def init({client, opts}) do
     with {:ok, config} <- connection_config(client, opts) do
+      Process.send_after(self(), :archastro_sweep_pending, @pending_sweep_interval_msec)
+
       socket =
         new_socket()
         |> assign(
@@ -110,7 +119,13 @@ defmodule ArchAstro.SDK.Socket do
   def handle_call({:archastro_push, topic, event, payload, descriptor}, from, socket) do
     case push(socket, topic, event, Codec.encode(payload)) do
       {:ok, ref} ->
-        pending = %{from: from, topic: topic, descriptor: descriptor}
+        pending = %{
+          from: from,
+          topic: topic,
+          descriptor: descriptor,
+          inserted_at: System.monotonic_time(:millisecond)
+        }
+
         {:noreply, update(socket, :pending_pushes, &Map.put(&1, ref, pending))}
 
       {:error, reason} ->
@@ -177,7 +192,8 @@ defmodule ArchAstro.SDK.Socket do
       froms: [from],
       payload: Codec.encode(payload),
       module: module,
-      descriptor: descriptor
+      descriptor: descriptor,
+      inserted_at: System.monotonic_time(:millisecond)
     }
 
     update(socket, :pending_joins, &Map.put(&1, topic, pending))
@@ -267,6 +283,39 @@ defmodule ArchAstro.SDK.Socket do
     end)
 
     {:ok, socket}
+  end
+
+  @impl Slipstream
+  def handle_info(:archastro_sweep_pending, socket) do
+    Process.send_after(self(), :archastro_sweep_pending, @pending_sweep_interval_msec)
+    cutoff = System.monotonic_time(:millisecond) - @pending_sweep_interval_msec
+
+    {expired_pushes, live_pushes} =
+      Enum.split_with(socket.assigns.pending_pushes, fn {_ref, request} ->
+        request.inserted_at <= cutoff
+      end)
+
+    Enum.each(expired_pushes, fn {_ref, request} ->
+      GenServer.reply(request.from, {:error, no_reply_error("push")})
+    end)
+
+    {expired_joins, live_joins} =
+      Enum.split_with(socket.assigns.pending_joins, fn {_topic, pending} ->
+        pending.inserted_at <= cutoff
+      end)
+
+    Enum.each(expired_joins, fn {_topic, pending} ->
+      Enum.each(pending.froms, &GenServer.reply(&1, {:error, no_reply_error("join")}))
+    end)
+
+    {:noreply,
+     socket
+     |> assign(:pending_pushes, Map.new(live_pushes))
+     |> assign(:pending_joins, Map.new(live_joins))}
+  end
+
+  defp no_reply_error(kind) do
+    %Error{message: "channel #{kind} was never acknowledged", code: "no_reply"}
   end
 
   @impl Slipstream
