@@ -308,6 +308,51 @@ defmodule ArchAstro.SDK.SocketTest do
     end
   end
 
+  describe "join responses with no waiter" do
+    test "a join acked after its waiters are gone leaves the topic instead of stranding it" do
+      socket =
+        Slipstream.Socket.new()
+        |> Map.put(:channel_pid, self())
+        |> Map.put(:joins, %{
+          "room:1" => %Slipstream.Socket.Join{
+            topic: "room:1",
+            params: %{},
+            status: :joined,
+            rejoin_counter: 0
+          }
+        })
+        |> Slipstream.Socket.assign(:channels, %{})
+        |> Slipstream.Socket.assign(:pending_joins, %{})
+
+      assert {:ok, _socket} = ArchAstro.SDK.Socket.handle_join("room:1", %{}, socket)
+
+      assert_receive {:__slipstream_command__, %Slipstream.Commands.LeaveTopic{topic: "room:1"}}
+    end
+
+    test "an established topic rejoined after reconnect is kept, not left" do
+      channel = %ArchAstro.SDK.Channel{socket: self(), topic: "room:1", module: __MODULE__}
+
+      socket =
+        Slipstream.Socket.new()
+        |> Map.put(:channel_pid, self())
+        |> Map.put(:joins, %{
+          "room:1" => %Slipstream.Socket.Join{
+            topic: "room:1",
+            params: %{},
+            status: :joined,
+            rejoin_counter: 1
+          }
+        })
+        |> Slipstream.Socket.assign(:channels, %{"room:1" => channel})
+        |> Slipstream.Socket.assign(:pending_joins, %{})
+
+      assert {:ok, kept} = ArchAstro.SDK.Socket.handle_join("room:1", %{}, socket)
+
+      assert Map.has_key?(kept.assigns.channels, "room:1")
+      refute_received {:__slipstream_command__, %Slipstream.Commands.LeaveTopic{}}
+    end
+  end
+
   describe "decode failures do not crash the socket" do
     setup do
       handler_id = "socket-decode-failure-#{inspect(make_ref())}"
