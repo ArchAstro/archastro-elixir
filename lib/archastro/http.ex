@@ -75,7 +75,7 @@ defmodule ArchAstro.SDK.HTTP do
         {:ok, decoded}
 
       {:ok, response} ->
-        error = Error.from_response(response)
+        error = response |> decode_error_body() |> Error.from_response()
 
         :telemetry.execute(
           [:archastro, :request, :stop],
@@ -97,4 +97,15 @@ defmodule ArchAstro.SDK.HTTP do
         {:error, error}
     end
   end
+
+  # Raw requests suppress Req's body decoding, which would otherwise strip the
+  # structured error envelope off a failure response too.
+  defp decode_error_body(%Req.Response{body: body} = response) when is_binary(body) do
+    case Jason.decode(body) do
+      {:ok, decoded} -> %{response | body: decoded}
+      {:error, _reason} -> response
+    end
+  end
+
+  defp decode_error_body(response), do: response
 end
