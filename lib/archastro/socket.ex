@@ -224,7 +224,17 @@ defmodule ArchAstro.SDK.Socket do
   def handle_join(topic, response, socket) do
     case Map.pop(socket.assigns.pending_joins, topic) do
       {nil, pending_joins} ->
-        {:ok, assign(socket, :pending_joins, pending_joins)}
+        socket = assign(socket, :pending_joins, pending_joins)
+
+        # No waiter and no established channel means the join outlived
+        # everyone who wanted it (swept, or its callers gave up). Leaving
+        # returns the topic to a closed state; stranding it as joined-but-
+        # unowned would make every later join a silent no-op.
+        if Map.has_key?(socket.assigns.channels, topic) do
+          {:ok, socket}
+        else
+          {:ok, if(joined?(socket, topic), do: leave(socket, topic), else: socket)}
+        end
 
       {pending, pending_joins} ->
         case safe_decode(response, pending.descriptor, %{topic: topic, kind: :join}) do
