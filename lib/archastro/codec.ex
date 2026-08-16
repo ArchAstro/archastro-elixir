@@ -74,7 +74,7 @@ defmodule ArchAstro.SDK.Codec do
   def encode(%Date{} = value), do: Date.to_iso8601(value)
 
   def encode(%module{} = value) do
-    if function_exported?(module, :to_map, 1),
+    if Code.ensure_loaded?(module) and function_exported?(module, :to_map, 1),
       do: module.to_map(value),
       else: Map.from_struct(value)
   end
