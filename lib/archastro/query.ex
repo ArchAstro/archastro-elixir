@@ -18,14 +18,20 @@ defmodule ArchAstro.SDK.Query do
     value
     |> ArchAstro.SDK.Codec.encode()
     |> Enum.flat_map(fn
-      {_key, :__archastro_unset__} -> []
-      {key, values} when is_list(values) -> Enum.map(values, &{key, scalar(&1)})
-      {key, item} -> [{key, scalar(item)}]
+      # Codec.encode has already rewritten unset sentinels to nil; a nil
+      # param means "not provided", never the string "null".
+      {_key, nil} ->
+        []
+
+      {key, values} when is_list(values) ->
+        for value <- values, value != nil, do: {key, scalar(value)}
+
+      {key, item} ->
+        [{key, scalar(item)}]
     end)
     |> URI.encode_query()
   end
 
-  defp scalar(nil), do: "null"
   defp scalar(value) when is_binary(value), do: value
   defp scalar(value) when is_boolean(value) or is_number(value), do: to_string(value)
   defp scalar(value) when is_map(value) or is_list(value), do: Jason.encode!(value)

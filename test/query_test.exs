@@ -32,4 +32,15 @@ defmodule ArchAstro.SDK.QueryTest do
     assert ArchAstro.SDK.Query.append("https://example.test/path", %Params{tags: []}) ==
              "https://example.test/path"
   end
+
+  test "omits nil params instead of sending the string null" do
+    assert ArchAstro.SDK.Query.encode(%{"cursor" => nil, "limit" => 5}) == "limit=5"
+
+    assert ArchAstro.SDK.Query.append("https://example.test/path", %{"cursor" => nil}) ==
+             "https://example.test/path"
+  end
+
+  test "omits nil elements inside repeated params" do
+    assert ArchAstro.SDK.Query.encode(%{"tags" => ["one", nil, "two"]}) == "tags=one&tags=two"
+  end
 end
