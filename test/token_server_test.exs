@@ -537,4 +537,15 @@ defmodule ArchAstro.SDK.TokenServerTest do
     assert {:ok, authorization} = TokenServer.authorization(client.token_binding)
     assert {"x-archastro-api-key", "sk_test"} in authorization.headers
   end
+
+  test "default requests never follow redirects" do
+    # A 3xx from the platform is always wrong; following it can silently turn a
+    # token-refresh POST into a body-less GET against the Location target.
+    server = start_supervised!({TokenServer.Default, mode: {:secret_key, "sk_test"}})
+
+    assert :sys.get_state(server).req.options[:redirect] == false
+
+    assert {:ok, client} = Client.for_server(server)
+    assert client.request.options[:redirect] == false
+  end
 end

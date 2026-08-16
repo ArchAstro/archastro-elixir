@@ -43,7 +43,7 @@ defmodule ArchAstro.SDK.Client do
            opts
            |> Keyword.get(:base_url, ArchAstro.SDK.GeneratedClient.default_base_url())
            |> String.trim_trailing("/"),
-         request: Keyword.get(opts, :req, Req.new(retry: false)),
+         request: Keyword.get(opts, :req, Req.new(retry: false, redirect: false)),
          token_binding: binding,
          telemetry_metadata: Keyword.get(opts, :telemetry_metadata, %{})
        }}
