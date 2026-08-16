@@ -1,6 +1,6 @@
 {
   "name": "archastro",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "baseUrl": "https://platform.archastro.ai",
   "apiBase": "/api",
   "defaultVersion": "v1",
