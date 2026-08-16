@@ -21,8 +21,13 @@ defmodule ArchAstro.SDK.Channel do
           ArchAstro.SDK.Codec.descriptor(),
           timeout()
         ) :: {:ok, t()} | {:error, ArchAstro.SDK.Error.reason()}
-  def join(socket, topic, payload, module, descriptor, timeout \\ 5_000),
-    do: GenServer.call(socket, {:archastro_join, topic, payload, module, descriptor}, timeout)
+  # Payloads are encoded here rather than in the socket process: an
+  # unencodable value must fail its own caller, not take down the shared
+  # socket and every other channel riding on it.
+  def join(socket, topic, payload, module, descriptor, timeout \\ 5_000) do
+    encoded = ArchAstro.SDK.Codec.encode(payload)
+    GenServer.call(socket, {:archastro_join, topic, encoded, module, descriptor}, timeout)
+  end
 
   @spec push(
           t(),
@@ -31,13 +36,15 @@ defmodule ArchAstro.SDK.Channel do
           ArchAstro.SDK.Codec.descriptor(),
           timeout()
         ) :: {:ok, ArchAstro.SDK.JSON.t() | struct() | :ok} | {:error, ArchAstro.SDK.Error.reason()}
-  def push(%__MODULE__{} = channel, event, payload, descriptor, timeout \\ 5_000),
-    do:
-      GenServer.call(
-        channel.socket,
-        {:archastro_push, channel.topic, event, payload, descriptor},
-        timeout
-      )
+  def push(%__MODULE__{} = channel, event, payload, descriptor, timeout \\ 5_000) do
+    encoded = ArchAstro.SDK.Codec.encode(payload)
+
+    GenServer.call(
+      channel.socket,
+      {:archastro_push, channel.topic, event, encoded, descriptor},
+      timeout
+    )
+  end
 
   @spec subscribe(t(), String.t(), pid(), ArchAstro.SDK.Codec.descriptor()) :: :ok
   def subscribe(%__MODULE__{} = channel, event, subscriber, descriptor)

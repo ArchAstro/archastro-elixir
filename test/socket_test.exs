@@ -213,6 +213,35 @@ defmodule ArchAstro.SDK.SocketTest do
     refute Map.has_key?(left_socket.assigns.channels, "room:1")
   end
 
+  describe "outbound payload encoding" do
+    test "encode failures raise in the caller process, never inside the socket" do
+      test_pid = self()
+      # A stand-in socket that reports anything it receives and never replies,
+      # so a payload reaching the socket process is visible as a message.
+      socket = spawn_link(fn -> relay_forever(test_pid) end)
+      channel = %ArchAstro.SDK.Channel{socket: socket, topic: "room:1", module: __MODULE__}
+      bad_payload = %{"scheduled_at" => ~N[2026-08-16 12:00:00]}
+
+      assert_raise ArgumentError, ~r/NaiveDateTime/, fn ->
+        ArchAstro.SDK.Channel.push(channel, "evt", bad_payload, :string, 200)
+      end
+
+      assert_raise ArgumentError, ~r/NaiveDateTime/, fn ->
+        ArchAstro.SDK.Channel.join(socket, "room:1", bad_payload, __MODULE__, :string, 200)
+      end
+
+      refute_receive {:socket_received, _message}, 50
+    end
+  end
+
+  defp relay_forever(test_pid) do
+    receive do
+      message ->
+        send(test_pid, {:socket_received, message})
+        relay_forever(test_pid)
+    end
+  end
+
   describe "pending entry sweep" do
     test "sweeps pushes and joins that were never acknowledged, keeping fresh ones" do
       stale_push_tag = make_ref()
