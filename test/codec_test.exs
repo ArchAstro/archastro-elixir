@@ -82,4 +82,16 @@ defmodule ArchAstro.SDK.CodecTest do
     descriptor = {:union, [:datetime, {:enum, ["not-a-date"]}]}
     assert "not-a-date" = ArchAstro.SDK.Codec.decode("not-a-date", descriptor)
   end
+
+  test "encoding a NaiveDateTime raises a clear error instead of leaking a struct" do
+    assert_raise ArgumentError, ~r/NaiveDateTime.*DateTime/s, fn ->
+      ArchAstro.SDK.Codec.encode(%{"scheduled_at" => ~N[2026-08-16 12:00:00]})
+    end
+  end
+
+  test "encoding a Time raises a clear error instead of leaking a struct" do
+    assert_raise ArgumentError, ~r/Time/, fn ->
+      ArchAstro.SDK.Codec.encode(~T[12:00:00])
+    end
+  end
 end
