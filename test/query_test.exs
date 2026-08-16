@@ -43,4 +43,14 @@ defmodule ArchAstro.SDK.QueryTest do
   test "omits nil elements inside repeated params" do
     assert ArchAstro.SDK.Query.encode(%{"tags" => ["one", nil, "two"]}) == "tags=one&tags=two"
   end
+
+  defmodule SentinelParams do
+    # A params struct with no to_map/1: Codec.encode falls back to
+    # Map.from_struct, which does not rewrite unset sentinels.
+    defstruct limit: :__archastro_unset__, cursor: :__archastro_unset__
+  end
+
+  test "omits unset sentinels that reach encoding un-rewritten" do
+    assert ArchAstro.SDK.Query.encode(%SentinelParams{limit: 5}) == "limit=5"
+  end
 end

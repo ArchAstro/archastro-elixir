@@ -18,13 +18,14 @@ defmodule ArchAstro.SDK.Query do
     value
     |> ArchAstro.SDK.Codec.encode()
     |> Enum.flat_map(fn
-      # Codec.encode has already rewritten unset sentinels to nil; a nil
-      # param means "not provided", never the string "null".
-      {_key, nil} ->
+      # A nil param means "not provided", never the string "null". The
+      # sentinel still arrives un-rewritten from Codec.encode's
+      # Map.from_struct fallback (structs without to_map/1).
+      {_key, value} when value in [nil, :__archastro_unset__] ->
         []
 
       {key, values} when is_list(values) ->
-        for value <- values, value != nil, do: {key, scalar(value)}
+        for value <- values, value not in [nil, :__archastro_unset__], do: {key, scalar(value)}
 
       {key, item} ->
         [{key, scalar(item)}]
