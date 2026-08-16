@@ -39,6 +39,11 @@ defmodule ArchAstro.SDK.HTTP do
     ]
 
     request_opts =
+      if Keyword.get(opts, :raw, false),
+        do: Keyword.put(request_opts, :decode_body, false),
+        else: request_opts
+
+    request_opts =
       case Keyword.fetch(opts, :body) do
         {:ok, value} -> Keyword.put(request_opts, :json, Codec.encode(value))
         :error -> request_opts
