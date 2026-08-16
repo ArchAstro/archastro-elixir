@@ -117,7 +117,7 @@ defmodule ArchAstro.SDK.Socket do
   end
 
   def handle_call({:archastro_push, topic, event, payload, descriptor}, from, socket) do
-    case push(socket, topic, event, Codec.encode(payload)) do
+    case push(socket, topic, event, payload) do
       {:ok, ref} ->
         pending = %{
           from: from,
@@ -190,7 +190,7 @@ defmodule ArchAstro.SDK.Socket do
   defp queue_join(socket, topic, payload, module, descriptor, from, nil) do
     pending = %{
       froms: [from],
-      payload: Codec.encode(payload),
+      payload: payload,
       module: module,
       descriptor: descriptor,
       inserted_at: System.monotonic_time(:millisecond)
