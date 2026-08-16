@@ -89,7 +89,7 @@ defmodule ArchAstro.SDK.TokenServer.Default do
        table: table,
        base_url:
          String.trim_trailing(Keyword.get(opts, :base_url, "https://platform.archastro.ai"), "/"),
-       req: Keyword.get(opts, :req, Req.new(retry: false)),
+       req: Keyword.get(opts, :req, Req.new(retry: false, redirect: false)),
        store: opts[:store],
        inflight: %{}
      }}
