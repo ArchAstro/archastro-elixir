@@ -17,7 +17,7 @@ Add `archastro` to `mix.exs`:
 
 ```elixir
 def deps do
-  [{:archastro, "~> 0.3"}]
+  [{:archastro, "~> 0.4"}]
 end
 ```
 
