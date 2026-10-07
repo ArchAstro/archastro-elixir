@@ -3,6 +3,7 @@ defmodule ArchAstro.SDK.AuthRedactionTest do
 
   test "generated credential structs redact secrets when inspected" do
     tokens = %ArchAstro.SDK.Types.AuthTokens{
+      account_created: false,
       expires_in: 3_600,
       refresh_token: "refresh-secret",
       token: "access-secret",
