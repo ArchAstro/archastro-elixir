@@ -380,6 +380,7 @@ defmodule ArchAstro.SDK.TokenServerTest do
              }
 
       Req.Test.json(conn, %{
+        "account_created" => false,
         "token" => "logged-in-access",
         "token_type" => "Bearer",
         "expires_in" => 3600,
